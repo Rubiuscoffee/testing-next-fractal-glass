@@ -35,12 +35,13 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   const materialRef = useRef<THREE.ShaderMaterial | null>(null);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const targetMouseRef = useRef({ x: 0.5, y: 0.5 });
-  const animationRef = useRef(null);
+  const animationRef = useRef<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [webglAvailable, setWebglAvailable] = useState(true);
   const textureRef = useRef<THREE.Texture | null>(null);
   const [inView, setInView] = useState(true);
   const containerSizeRef = useRef({ width: 0, height: 0 });
+  const [textureError, setTextureError] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -85,7 +86,9 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
     meshRef.current = new THREE.Mesh(geometry, materialRef.current);
     sceneRef.current.add(meshRef.current);
 
-    loadTexture();
+    const rect = containerRef.current.getBoundingClientRect();
+    if (rendererRef.current) rendererRef.current.setSize(rect.width, rect.height);
+    if (materialRef.current) materialRef.current.uniforms.uResolution.value.set(rect.width, rect.height);
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -114,7 +117,10 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
       io.disconnect();
       ro.disconnect();
 
-      if (animationRef.current) cancelAnimationFrame(animationRef.current as number);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
 
       if (rendererRef.current && containerRef.current) {
         containerRef.current.removeChild(rendererRef.current.domElement);
@@ -134,6 +140,18 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   }, [webglAvailable]);
 
   useEffect(() => {
+    if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !materialRef.current) return;
+    if (inView) {
+      if (!animationRef.current) animationRef.current = requestAnimationFrame(animate);
+    } else {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    }
+  }, [inView]);
+
+  useEffect(() => {
     if (!materialRef.current) return;
     materialRef.current.uniforms.uParallaxStrength.value = parallaxStrength;
     materialRef.current.uniforms.uDistortionMultiplier.value = distortionMultiplier;
@@ -144,12 +162,16 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   }, [parallaxStrength, distortionMultiplier, glassStrength, stripesFrequency, glassSmoothness, edgePadding]);
 
   useEffect(() => {
-    if (isLoaded) loadTexture();
-  }, [imgSrc, isLoaded]);
+    if (!materialRef.current || !webglAvailable) return;
+    setTextureError(false);
+    loadTexture();
+  }, [imgSrc, webglAvailable]);
 
   const loadTexture = () => {
     if (!materialRef.current || !webglAvailable) return;
     const loader = new THREE.TextureLoader();
+    // @ts-expect-error crossOrigin exists on TextureLoader
+    if (typeof (loader as any).setCrossOrigin === "function") (loader as any).setCrossOrigin("anonymous");
     loader.load(
       imgSrc,
       (texture) => {
@@ -164,7 +186,9 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
         setIsLoaded(true);
       },
       undefined,
-      () => {}
+      () => {
+        setTextureError(true);
+      }
     );
   };
 
@@ -196,7 +220,7 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   };
 
-  if (!webglAvailable) {
+  if (!webglAvailable || textureError) {
     return <img src={imgSrc} alt="" className={className} style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
   }
 
