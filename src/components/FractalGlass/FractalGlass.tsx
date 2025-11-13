@@ -8,6 +8,7 @@ type FractalGlassProps = {
   imgSrc: string;
   lerpFactor?: number;
   parallaxStrength?: number;
+  parallaxEnabled?: boolean;
   distortionMultiplier?: number;
   glassStrength?: number;
   glassSmoothness?: number;
@@ -20,6 +21,7 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   imgSrc,
   lerpFactor = 0.035,
   parallaxStrength = 0.1,
+  parallaxEnabled = true,
   distortionMultiplier = 10,
   glassStrength = 2.0,
   glassSmoothness = 0.0001,
@@ -71,7 +73,7 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
         uResolution: { value: new THREE.Vector2(1, 1) },
         uTextureSize: { value: new THREE.Vector2(textureSize.x, textureSize.y) },
         uMouse: { value: new THREE.Vector2(mouseRef.current.x, mouseRef.current.y) },
-        uParallaxStrength: { value: parallaxStrength },
+        uParallaxStrength: { value: parallaxEnabled ? parallaxStrength : 0 },
         uDistortionMultiplier: { value: distortionMultiplier },
         uGlassStrength: { value: glassStrength },
         ustripesFrequency: { value: stripesFrequency },
@@ -105,15 +107,9 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
     }, { threshold: 0.01 });
     io.observe(containerRef.current);
 
-    containerRef.current.addEventListener("pointermove", handlePointerMove);
-    containerRef.current.addEventListener("pointerleave", handlePointerLeave);
-
     animate();
 
     return () => {
-      containerRef.current?.removeEventListener("pointermove", handlePointerMove);
-      containerRef.current?.removeEventListener("pointerleave", handlePointerLeave);
-
       io.disconnect();
       ro.disconnect();
 
@@ -140,6 +136,22 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   }, [webglAvailable]);
 
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (parallaxEnabled) {
+      el.addEventListener("pointermove", handlePointerMove);
+      el.addEventListener("pointerleave", handlePointerLeave);
+      return () => {
+        el.removeEventListener("pointermove", handlePointerMove);
+        el.removeEventListener("pointerleave", handlePointerLeave);
+      };
+    } else {
+      targetMouseRef.current.x = 0.5;
+      targetMouseRef.current.y = 0.5;
+    }
+  }, [parallaxEnabled]);
+
+  useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !materialRef.current) return;
     if (inView) {
       if (!animationRef.current) animationRef.current = requestAnimationFrame(animate);
@@ -153,13 +165,16 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
 
   useEffect(() => {
     if (!materialRef.current) return;
-    materialRef.current.uniforms.uParallaxStrength.value = parallaxStrength;
+    materialRef.current.uniforms.uParallaxStrength.value = parallaxEnabled ? parallaxStrength : 0;
     materialRef.current.uniforms.uDistortionMultiplier.value = distortionMultiplier;
     materialRef.current.uniforms.uGlassStrength.value = glassStrength;
     materialRef.current.uniforms.ustripesFrequency.value = stripesFrequency;
     materialRef.current.uniforms.uglassSmoothness.value = glassSmoothness;
     materialRef.current.uniforms.uEdgePadding.value = edgePadding;
-  }, [parallaxStrength, distortionMultiplier, glassStrength, stripesFrequency, glassSmoothness, edgePadding]);
+    if (!parallaxEnabled) {
+      materialRef.current.uniforms.uMouse.value.set(0.5, 0.5);
+    }
+  }, [parallaxEnabled, parallaxStrength, distortionMultiplier, glassStrength, stripesFrequency, glassSmoothness, edgePadding]);
 
   useEffect(() => {
     if (!materialRef.current || !webglAvailable) return;
@@ -214,8 +229,13 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !materialRef.current) return;
     if (!inView) return;
     animationRef.current = requestAnimationFrame(animate);
-    mouseRef.current.x = lerp(mouseRef.current.x, targetMouseRef.current.x, lerpFactor);
-    mouseRef.current.y = lerp(mouseRef.current.y, targetMouseRef.current.y, lerpFactor);
+    if (parallaxEnabled) {
+      mouseRef.current.x = lerp(mouseRef.current.x, targetMouseRef.current.x, lerpFactor);
+      mouseRef.current.y = lerp(mouseRef.current.y, targetMouseRef.current.y, lerpFactor);
+    } else {
+      mouseRef.current.x = 0.5;
+      mouseRef.current.y = 0.5;
+    }
     materialRef.current.uniforms.uMouse.value.set(mouseRef.current.x, mouseRef.current.y);
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   };
