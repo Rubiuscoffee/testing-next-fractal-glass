@@ -185,17 +185,16 @@ const FractalGlass: React.FC<FractalGlassProps> = ({
   const loadTexture = () => {
     if (!materialRef.current || !webglAvailable) return;
     const loader = new THREE.TextureLoader();
-    // @ts-expect-error crossOrigin exists on TextureLoader
-    if (typeof (loader as any).setCrossOrigin === "function") (loader as any).setCrossOrigin("anonymous");
+    (loader as THREE.Loader).crossOrigin = "anonymous";
     loader.load(
       imgSrc,
-      (texture) => {
+      (texture: THREE.Texture) => {
         if (textureRef.current) textureRef.current.dispose();
         textureRef.current = texture;
         texture.needsUpdate = true;
-        const img = texture.image as HTMLImageElement;
-        const width = (img as any).naturalWidth || (img as any).width;
-        const height = (img as any).naturalHeight || (img as any).height;
+        const img = texture.image as { width: number; height: number } & Partial<{ naturalWidth: number; naturalHeight: number }>;
+        const width = typeof img.naturalWidth === "number" ? img.naturalWidth : img.width;
+        const height = typeof img.naturalHeight === "number" ? img.naturalHeight : img.height;
         materialRef.current!.uniforms.uTexture.value = texture;
         materialRef.current!.uniforms.uTextureSize.value.set(width, height);
         setIsLoaded(true);

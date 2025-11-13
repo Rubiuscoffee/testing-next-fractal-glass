@@ -18,13 +18,6 @@ export default function Home() {
       <section className="hero">
         <FractalGlass
           imgSrc="/hero.jpg"
-          lerpFactor={0.035}
-          parallaxStrength={0.1}
-          distortionMultiplier={10}
-          glassStrength={2.0}
-          glassSmoothness={0.0001}
-          stripesFrequency={35}
-          edgePadding={0.1}
         />
 
         <div className="hero-content">
